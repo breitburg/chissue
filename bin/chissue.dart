@@ -1,23 +1,22 @@
-import 'dart:io';
-
+import 'package:dotenv/dotenv.dart';
 import 'package:github/github.dart';
 import 'package:langchain/langchain.dart';
 import 'package:langchain_openai/langchain_openai.dart';
 import 'package:televerse/telegram.dart';
 import 'package:televerse/televerse.dart';
 
-final aiModel = Platform.environment['OPENAI_MODEL']!;
-final repositorySlug =
-    RepositorySlug.full(Platform.environment['GITHUB_REPOSITORY']!);
+final env = DotEnv(includePlatformEnvironment: true)..load();
 
-final openaiKey = Platform.environment['OPENAI_API_KEY']!;
-final openaiBaseUrl = Platform.environment['OPENAI_BASE_URL'] ?? 'https://api.openai.com/v1';
+final aiModel = env['OPENAI_MODEL']!;
+final repositorySlug = RepositorySlug.full(env['GITHUB_REPOSITORY']!);
 
-final botUsername = Platform.environment['TELEGRAM_BOT_USERNAME']!;
-final botToken = Platform.environment['TELEGRAM_BOT_TOKEN']!;
+final openaiKey = env['OPENAI_API_KEY']!;
+final openaiBaseUrl = env['OPENAI_BASE_URL'] ?? 'https://api.openai.com/v1';
 
-final githubAuth =
-    Authentication.withToken(Platform.environment['GITHUB_TOKEN']!);
+final botUsername = env['TELEGRAM_BOT_USERNAME']!;
+final botToken = env['TELEGRAM_BOT_TOKEN']!;
+
+final githubAuth = Authentication.withToken(env['GITHUB_TOKEN']!);
 
 final chats = <int, List<Message>>{};
 
@@ -33,20 +32,21 @@ void main() async {
         ChatOpenAIJsonSchema(
           name: 'issue',
           schema: {
-            "type": "object",
-            "properties": {
-              "title": {"type": "string"},
-              "body": {"type": "string"},
-              "labels": {
-                "type": "array",
-                "items": {"type": "string"}
+            'type': 'object',
+            'properties': {
+              'title': {'type': 'string'},
+              'body': {'type': 'string'},
+              'labels': {
+                'type': 'array',
+                'items': {'type': 'string'}
               },
-              "assignee": {
-                "type": ["string", "null"]
+              'assignees': {
+                'type': 'array',
+                'items': {'type': 'string'}
               }
             },
-            "required": ["title", "body", "labels", "assignee"],
-            "additionalProperties": false
+            'required': ['title', 'body', 'labels', 'assignees'],
+            'additionalProperties': false
           },
           strict: true,
         ),
@@ -63,7 +63,7 @@ void main() async {
       final message = context.message!;
 
       if (message.text?.contains('@$botUsername') == true) {
-        // Include only last 10 messages from the chat.
+        // Include only last 20 messages from the chat.
         // TODO: Make it include all the recent messages when the interval between them is less than 30 minutes.
         final chatHistory =
             chats[message.chat.id]?.reversed.take(20).toList().reversed;
@@ -92,11 +92,12 @@ void main() async {
         final labels = await github.issues.listLabels(repositorySlug).toList();
 
         final prompt = template.formatPrompt({
-          'labels': [for (final label in labels) '"${label.name}"'].join(', '),
+          'labels': [for (final label in labels) '`${label.name}`'].join(', '),
           'chat_history': [
             for (final chatMessage in chatHistory)
-              '- "${chatMessage.from?.username}": ${chatMessage.text}'
-          ].join('\n'),
+              if (chatMessage.text != null)
+                '- `${chatMessage.from?.username}` (${chatMessage.dateTime.toIso8601String()}):\n${chatMessage.text!.replaceAll('\n', '\n  ')}'
+          ].join('\n\n'),
         });
 
         final json =

@@ -14,7 +14,7 @@ Required:
 - `GITHUB_TOKEN` - GitHub token
 - `GITHUB_REPOSITORY` - GitHub repository (e.g. `breitburg/chissue`)
 - `OPENAI_API_KEY` - OpenAI API key
-- `OPENAI_MODEL` - OpenAI model with support for schema-based output (e.g. `gpt-4o-mini`)
+- `OPENAI_MODEL` - OpenAI model with [support for schema-based output](https://platform.openai.com/docs/guides/structured-outputs/supported-models) (e.g. `gpt-4o-mini`)
 
 Optional:
 

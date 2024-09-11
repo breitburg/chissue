@@ -6,6 +6,7 @@ environment:
   sdk: ^3.5.0
 
 dependencies:
+  dotenv: ^4.2.0
   github: ^9.24.0
   langchain: ^0.7.5
   langchain_openai: ^0.7.1
