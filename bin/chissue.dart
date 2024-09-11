@@ -57,68 +57,77 @@ void main() async {
   final template =
       await ChatPromptTemplate.fromTemplateFile('assets/prompt.md');
 
-  final bot = Bot(botToken)
-    ..onMessage((Context context) async {
-      if (context.message == null) return;
-      final message = context.message!;
+  final bot = Bot(botToken);
 
-      if (message.text?.contains('@$botUsername') == true) {
-        // Include only last 20 messages from the chat.
-        // TODO: Make it include all the recent messages when the interval between them is less than 30 minutes.
-        final chatHistory =
-            chats[message.chat.id]?.reversed.take(20).toList().reversed;
+  bot.onError((error) {
+    error.ctx?.reply(
+      'Sorry, an error occurred: `$error`',
+      parseMode: ParseMode.markdown,
+    );
+    throw error;
+  });
 
-        if (chatHistory == null || chatHistory.isEmpty) {
-          await context.reply('No chat history found.');
-          return;
-        }
+  bot.onMessage((Context context) async {
+    if (context.message == null) return;
+    final message = context.message!;
 
-        final withoutUsernames = [
-          for (final message in chatHistory)
-            if (message.from?.username == null)
-              '${message.from?.firstName} ${message.from?.lastName}'
-        ];
+    if (message.text?.contains('@$botUsername') == true) {
+      // Include only last 20 messages from the chat.
+      // TODO: Make it include all the recent messages when the interval between them is less than 30 minutes.
+      final chatHistory =
+          chats[message.chat.id]?.reversed.take(20).toList().reversed;
 
-        if (withoutUsernames.isNotEmpty) {
-          await context.reply(
-            'Chat history includes messages from users without usernames: ${withoutUsernames.join(', ')}. '
-            'Please remind all users to set their usernames as they appear on GitHub.',
-          );
-          return;
-        }
-
-        await context.sendTyping();
-
-        final labels = await github.issues.listLabels(repositorySlug).toList();
-
-        final prompt = template.formatPrompt({
-          'labels': [for (final label in labels) '`${label.name}`'].join(', '),
-          'chat_history': [
-            for (final chatMessage in chatHistory)
-              if (chatMessage.text != null)
-                '- `${chatMessage.from?.username}` (${chatMessage.dateTime.toIso8601String()}):\n${chatMessage.text!.replaceAll('\n', '\n  ')}'
-          ].join('\n\n'),
-        });
-
-        final json =
-            await JsonOutputParser().invoke(await mistral.invoke(prompt));
-
-        final issue = await github.issues.create(
-          repositorySlug,
-          IssueRequest.fromJson(json),
-        );
-
-        await context.reply(
-          'Issue [${issue.title}](${issue.htmlUrl}) #${issue.number} created successfully.',
-          parseMode: ParseMode.markdown,
-        );
-
+      if (chatHistory == null || chatHistory.isEmpty) {
+        await context.reply('No chat history found.');
         return;
       }
 
-      print('Message recorded');
-      chats.putIfAbsent(message.chat.id, () => <Message>[]).add(message);
-    });
+      final withoutUsernames = [
+        for (final message in chatHistory)
+          if (message.from?.username == null)
+            '${message.from?.firstName} ${message.from?.lastName}'
+      ];
+
+      if (withoutUsernames.isNotEmpty) {
+        await context.reply(
+          'Chat history includes messages from users without usernames: ${withoutUsernames.join(', ')}. '
+          'Please remind all users to set their usernames as they appear on GitHub.',
+        );
+        return;
+      }
+
+      await context.sendTyping();
+
+      final labels = await github.issues.listLabels(repositorySlug).toList();
+
+      final prompt = template.formatPrompt({
+        'labels': [for (final label in labels) '`${label.name}`'].join(', '),
+        'chat_history': [
+          for (final chatMessage in chatHistory)
+            if (chatMessage.text != null)
+              '- `${chatMessage.from?.username}` (${chatMessage.dateTime.toIso8601String()}):\n${chatMessage.text!.replaceAll('\n', '\n  ')}'
+        ].join('\n\n'),
+      });
+
+      final json =
+          await JsonOutputParser().invoke(await mistral.invoke(prompt));
+
+      final issue = await github.issues.create(
+        repositorySlug,
+        IssueRequest.fromJson(json),
+      );
+
+      await context.reply(
+        'Issue [${issue.title}](${issue.htmlUrl}) #${issue.number} created successfully.',
+        parseMode: ParseMode.markdown,
+      );
+
+      return;
+    }
+
+    print('Message recorded');
+    chats.putIfAbsent(message.chat.id, () => <Message>[]).add(message);
+  });
 
   await bot.start();
 }
